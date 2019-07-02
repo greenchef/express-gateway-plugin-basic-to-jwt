@@ -1,3 +1,5 @@
+const request = require('request-promise-native');
+
 module.exports = {
   name: 'basic-to-jwt',
   schema: {
@@ -10,10 +12,24 @@ module.exports = {
     }
   },
   policy: ({ authUrl }) => {
-    return (req, res, next) => {
+    return async (req, res, next) => {
       console.log('Executing "basic-to-jwt" policy with "authServiceUrl" of', authUrl);
-      next() // calling next policy
-      // or write response:  res.json({result: "this is the response"})
+      try {
+        const token = await request({
+          uri: authUrl,
+          headers: req.headers,
+        });
+        req.headers = {
+          ...req.headers,
+          authorization: `Bearer ${token}`,
+        }
+        console.log(req.headers)
+      } catch (e) {
+        console.error('Request to auth service failed. Error:', e.error)
+        res.status(e.statusCode).send(e.message)
+        return;
+      }
+      next();
     };
   }
 };
