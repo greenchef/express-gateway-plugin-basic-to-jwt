@@ -12,13 +12,13 @@ module.exports = {
       }
     }
   },
-  policy: ({ authUrl, nameProperty, passProperty }) => {
+  policy: ({ authUrl, nameProperty, passProperty, tokenProperty }) => {
     return async (req, res, next) => {
       try {
 				const authHeader = (req.headers || {}).authorization;
 				if (authHeader && authHeader.startsWith('Basic ')) {
           const credentials = auth(req);
-					const token = await request({
+					const response = await request({
             method: 'POST',
 						uri: authUrl,
             body: {
@@ -29,7 +29,7 @@ module.exports = {
 					});
 					req.headers = {
 						...req.headers,
-						authorization: `Bearer ${token}`,
+						authorization: `Bearer ${tokenProperty ? response[tokenProperty] : response}`,
 					}
 				}
       } catch (e) {
