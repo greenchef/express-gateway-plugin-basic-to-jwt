@@ -1,3 +1,4 @@
+const auth = require('basic-auth');
 const request = require('request-promise-native');
 
 module.exports = {
@@ -11,14 +12,20 @@ module.exports = {
       }
     }
   },
-  policy: ({ authUrl }) => {
+  policy: ({ authUrl, nameProperty, passProperty }) => {
     return async (req, res, next) => {
       try {
 				const authHeader = (req.headers || {}).authorization;
 				if (authHeader && authHeader.startsWith('Basic ')) {
+          const credentials = auth(req);
 					const token = await request({
+            method: 'POST',
 						uri: authUrl,
-						headers: req.headers,
+            body: {
+              [nameProperty]: credentials.name,
+              [passProperty]: credentials.pass
+            },
+            json: true
 					});
 					req.headers = {
 						...req.headers,
@@ -27,7 +34,7 @@ module.exports = {
 				}
       } catch (e) {
         console.error('Request to auth service failed. Error:', e.error)
-        res.status(e.statusCode).send(e.message)
+        res.sendStatus(e.statusCode)
         return;
       }
       next();
