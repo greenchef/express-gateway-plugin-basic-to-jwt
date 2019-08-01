@@ -33,7 +33,7 @@ module.exports = {
 					}
 				}
       } catch (e) {
-        console.error('Request to auth service failed. Error:', e.error)
+        console.error('Error in basic-to-jwt policy:', e.error)
         res.sendStatus(e.statusCode)
         return;
       }
