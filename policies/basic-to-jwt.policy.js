@@ -1,6 +1,8 @@
 const auth = require('basic-auth');
 const request = require('request-promise-native');
 
+const { defaultClient } = require('../initializers/redis');
+
 module.exports = {
   name: 'basic-to-jwt',
   schema: {
@@ -18,18 +20,23 @@ module.exports = {
 				const authHeader = (req.headers || {}).authorization;
 				if (authHeader && authHeader.startsWith('Basic ')) {
           const credentials = auth(req);
-					const response = await request({
-            method: 'POST',
-						uri: authUrl,
-            body: {
-              [nameProperty]: credentials.name,
-              [passProperty]: credentials.pass
-            },
-            json: true
-					});
+          let token = await defaultClient.get(credentials.name);
+          if (!token) {
+            const response = await request({
+              method: 'POST',
+              uri: authUrl,
+              body: {
+                [nameProperty]: credentials.name,
+                [passProperty]: credentials.pass
+              },
+              json: true
+            });
+            token = tokenProperty ? response[tokenProperty] : response;
+            defaultClient.set(credentials.name, token, 'EX', 200);
+          }
 					req.headers = {
 						...req.headers,
-						authorization: `Bearer ${tokenProperty ? response[tokenProperty] : response}`,
+						authorization: `Bearer ${token}`,
 					}
 				}
       } catch (e) {
