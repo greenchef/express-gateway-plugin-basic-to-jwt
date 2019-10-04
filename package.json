@@ -1,12 +1,11 @@
 {
   "name": "express-gateway-plugin-basic-to-jwt",
-  "version": "1.0.0",
+  "version": "1.2.2",
   "main": "manifest.js",
   "license": "UNLICENSED",
   "dependencies": {
     "basic-auth": "^2.0.1",
     "ioredis": "^4.14.1",
-    "moment": "^2.24.0",
     "request": "2.88.0",
     "request-promise-native": "1.0.7"
   }

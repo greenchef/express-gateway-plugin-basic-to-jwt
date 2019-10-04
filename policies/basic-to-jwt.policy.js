@@ -14,13 +14,16 @@ module.exports = {
       }
     }
   },
-  policy: ({ authUrl, nameProperty, passProperty, tokenProperty }) => {
+  policy: ({ authUrl, nameProperty, passProperty, tokenProperty, cacheSeconds = 0 }) => {
     return async (req, res, next) => {
       try {
 				const authHeader = (req.headers || {}).authorization;
 				if (authHeader && authHeader.startsWith('Basic ')) {
           const credentials = auth(req);
-          let token = await defaultClient.get(credentials.name);
+          let token = null;
+          if (cacheSeconds > 0) {
+            token = await defaultClient.get(credentials.name);
+          } 
           if (!token) {
             const response = await request({
               method: 'POST',
@@ -32,7 +35,9 @@ module.exports = {
               json: true
             });
             token = tokenProperty ? response[tokenProperty] : response;
-            defaultClient.set(credentials.name, token, 'EX', 200);
+            if (cacheSeconds > 0) {
+              defaultClient.set(credentials.name, token, 'EX', cacheSeconds);
+            } 
           }
 					req.headers = {
 						...req.headers,
