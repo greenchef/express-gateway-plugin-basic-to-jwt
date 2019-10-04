@@ -1,7 +1,8 @@
 const auth = require('basic-auth');
 const request = require('request-promise-native');
 
-const { defaultClient } = require('../initializers/redis');
+const NodeCache = require( "node-cache" );
+const tokenCache = new NodeCache( { stdTTL: 200, checkperiod: 220 } );
 
 module.exports = {
   name: 'basic-to-jwt',
@@ -20,7 +21,7 @@ module.exports = {
 				const authHeader = (req.headers || {}).authorization;
 				if (authHeader && authHeader.startsWith('Basic ')) {
           const credentials = auth(req);
-          let token = await defaultClient.get(credentials.name);
+          let token = tokenCache.get(credentials.name);
           if (!token) {
             const response = await request({
               method: 'POST',
@@ -32,7 +33,7 @@ module.exports = {
               json: true
             });
             token = tokenProperty ? response[tokenProperty] : response;
-            defaultClient.set(credentials.name, token, 'EX', 200);
+            tokenCache.set(credentials.name, token);
           }
 					req.headers = {
 						...req.headers,
