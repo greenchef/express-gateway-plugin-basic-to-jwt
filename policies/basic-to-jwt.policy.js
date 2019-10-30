@@ -20,9 +20,10 @@ module.exports = {
 				const authHeader = (req.headers || {}).authorization;
 				if (authHeader && authHeader.startsWith('Basic ')) {
           const credentials = auth(req);
+          const redisKey = `${credentials.name}~?~${credentials.pass}`;
           let token = null;
           if (cacheSeconds > 0) {
-            token = await defaultClient.get(credentials.name);
+            token = await defaultClient.get(redisKey);
           } 
           if (!token) {
             const response = await request({
@@ -36,7 +37,7 @@ module.exports = {
             });
             token = tokenProperty ? response[tokenProperty] : response;
             if (cacheSeconds > 0) {
-              defaultClient.set(credentials.name, token, 'EX', cacheSeconds);
+              defaultClient.set(redisKey, token, 'EX', cacheSeconds);
             } 
           }
 					req.headers = {
