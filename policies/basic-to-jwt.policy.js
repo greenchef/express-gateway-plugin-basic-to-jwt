@@ -32,7 +32,7 @@ module.exports = {
             const refreshInProgress = await defaultClient.get(refreshRedisKey);
             if (!refreshInProgress) {
               const decodedToken = jwt.decode(token);
-              if((decodedToken.payload.exp - new Date()) < 30) {
+              if ((decodedToken.exp - (Date.now() / 1000)) <= 30) {
                 defaultClient.set(refreshRedisKey, true);
                 needsRefresh = true;
               }
@@ -62,7 +62,7 @@ module.exports = {
 					}
 				}
       } catch (e) {
-        console.error('Error in basic-to-jwt policy:', e.error)
+        console.error('Error in basic-to-jwt policy:', e)
         res.sendStatus(e.statusCode)
         return;
       }
@@ -70,3 +70,4 @@ module.exports = {
     };
   }
 };
+
