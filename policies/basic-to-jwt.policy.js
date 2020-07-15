@@ -1,4 +1,5 @@
 const auth = require('basic-auth');
+const jwt = require('jsonwebtoken');
 const request = require('request-promise-native');
 
 const { defaultClient } = require('../initializers/redis');
@@ -21,11 +22,23 @@ module.exports = {
 				if (authHeader && authHeader.startsWith('Basic ')) {
           const credentials = auth(req);
           const redisKey = `${credentials.name}~?~${credentials.pass}`;
+          const refreshRedisKey = `${credentials.name}~?~${credentials.pass}~?~refreshInProgress`;
           let token = null;
+          let needsRefresh = null;
           if (cacheSeconds > 0) {
             token = await defaultClient.get(redisKey);
           } 
-          if (!token) {
+          if (token) {
+            const refreshInProgress = await defaultClient.get(refreshRedisKey);
+            if (!refreshInProgress) {
+              const decodedToken = jwt.decode(token);
+              if((decodedToken.payload.exp - new Date()) < 30) {
+                defaultClient.set(refreshRedisKey, true);
+                needsRefresh = true;
+              }
+            }
+          }
+          if (!token || needsRefresh) {
             const response = await request({
               method: 'POST',
               uri: authUrl,
@@ -38,6 +51,9 @@ module.exports = {
             token = tokenProperty ? response[tokenProperty] : response;
             if (cacheSeconds > 0) {
               defaultClient.set(redisKey, token, 'EX', cacheSeconds);
+            }
+            if (needsRefresh) {
+              defaultClient.del(refreshRedisKey);
             } 
           }
 					req.headers = {
