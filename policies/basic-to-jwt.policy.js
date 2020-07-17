@@ -23,11 +23,8 @@ module.exports = {
           const credentials = auth(req);
           const redisKey = `${credentials.name}~?~${credentials.pass}`;
           const refreshRedisKey = `${credentials.name}~?~${credentials.pass}~?~refreshInProgress`;
-          let token = null;
+          const token = await defaultClient.get(redisKey);
           let needsRefresh = null;
-          if (cacheSeconds > 0) {
-            token = await defaultClient.get(redisKey);
-          } 
           if (token) {
             const refreshInProgress = await defaultClient.get(refreshRedisKey);
             if (!refreshInProgress) {
@@ -49,8 +46,10 @@ module.exports = {
               json: true
             });
             token = tokenProperty ? response[tokenProperty] : response;
-            if (cacheSeconds > 0) {
+            if (cacheSeconds) {
               defaultClient.set(redisKey, token, 'EX', cacheSeconds);
+            } else {
+              defaultClient.set(redisKey, token);
             }
             if (needsRefresh) {
               defaultClient.del(refreshRedisKey);
