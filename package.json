@@ -1,6 +1,6 @@
 {
   "name": "express-gateway-plugin-basic-to-jwt",
-  "version": "1.2.3",
+  "version": "1.3.0",
   "main": "manifest.js",
   "license": "UNLICENSED",
   "dependencies": {

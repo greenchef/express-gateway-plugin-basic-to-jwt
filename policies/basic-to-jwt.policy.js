@@ -23,7 +23,7 @@ module.exports = {
           const credentials = auth(req);
           const redisKey = `${credentials.name}~?~${credentials.pass}`;
           const refreshRedisKey = `${credentials.name}~?~${credentials.pass}~?~refreshInProgress`;
-          const token = await defaultClient.get(redisKey);
+          let token = await defaultClient.get(redisKey);
           let needsRefresh = null;
           if (token) {
             const refreshInProgress = await defaultClient.get(refreshRedisKey);
