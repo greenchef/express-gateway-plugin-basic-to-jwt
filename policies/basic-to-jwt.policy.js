@@ -30,7 +30,7 @@ module.exports = {
             if (!refreshInProgress) {
               const decodedToken = jwt.decode(token);
               if ((decodedToken.exp - (Date.now() / 1000)) <= 30) {
-                defaultClient.set(refreshRedisKey, true);
+                defaultClient.set(refreshRedisKey, true, 'EX', 10);
                 needsRefresh = true;
               }
             }
