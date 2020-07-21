@@ -61,6 +61,7 @@ module.exports = {
 					}
 				}
       } catch (e) {
+        defaultClient.del(refreshRedisKey);
         console.error('Error in basic-to-jwt policy:', e)
         res.sendStatus(e.statusCode)
         return;
