@@ -16,6 +16,13 @@ module.exports = {
     }
   },
   policy: ({ authUrl, nameProperty, passProperty, tokenProperty, cacheSeconds = 0 }) => {
+    const getAndCheckTokenExpiration = async (tokenKey, timeToCheck = 30) => {
+      const tokenInCache = await defaultClient.get(tokenKey);
+      if (!tokenInCache) return null;
+      const decodedToken = jwt.decode(tokenInCache);
+      return (decodedToken.exp - (Date.now() / 1000)) > timeToCheck ? tokenInCache : null;
+    }
+
     return async (req, res, next) => {
       let refreshRedisKey;
       try {
@@ -23,40 +30,39 @@ module.exports = {
 				if (authHeader && authHeader.startsWith('Basic ')) {
           const credentials = auth(req);
           const redisKey = `${credentials.name}~?~${credentials.pass}`;
-          refreshRedisKey = `${credentials.name}~?~${credentials.pass}~?~refreshInProgress`;
-          let token = await defaultClient.get(redisKey);
-          let needsRefresh = null;
-          if (token) {
-            const refreshInProgress = await defaultClient.get(refreshRedisKey);
-            const decodedToken = jwt.decode(token);
-            if ((decodedToken.exp - (Date.now() / 1000)) <= 30) {
-              if (!refreshInProgress) {
-                defaultClient.set(refreshRedisKey, true, 'EX', 10);
-                needsRefresh = true;
-              } else if ((decodedToken.exp - (Date.now() / 1000)) <= 1) {
-                let checks = 0;
-                token = null;
-                let decodeCheck = null;
-                while (checks < 10 && !token) {
-                  // wait for a second and poll every 200ms for new token
-                  // if no token found in that time go through anyway - will fail
-                  await new Promise((res) => {
-                    setTimeout(() => {
-                      res();
-                    }, 200)
-                  });
-                  token = await defaultClient.get(redisKey);
-                  decodeCheck = jwt.decode(token).exp;
-                  if ((decodeCheck - (Date.now() / 1000)) <= 1)  {
-                    token = null;
-                    checks += 1;
-                  }
-                }
-                if (!token) {
-                  token = 'bad token'
-                }
-              }
+          const goodToken = await getAndCheckTokenExpiration(redisKey);
+          if (goodToken) {
+            req.headers = {
+              ...req.headers,
+              authorization: `Bearer ${goodToken}`,
             }
+            return next();
+          }
+          refreshRedisKey = `${credentials.name}~?~${credentials.pass}~?~refreshInProgress`;
+          let token = await getAndCheckTokenExpiration(redisKey, 2);
+          let needsRefresh = null;
+          const refreshInProgress = await defaultClient.get(refreshRedisKey);
+          if (refreshInProgress && !token) {
+            let pollingCount = 0;
+              await new Promise((res) => {
+                setInterval(async () => {
+                  const refreshKeyExists = await defaultClient.get(refreshRedisKey)
+                  if (!refreshKeyExists) {
+                    token = await defaultClient.get(redisKey);
+                    clearInterval();
+                    res();
+                  } else {
+                    pollingCount += 1;
+                    if (pollingCount >= 10) {
+                      clearInterval();
+                      res()
+                    }
+                  }
+                }, 200)
+              });
+          } else if (!refreshInProgress) {
+            defaultClient.set(refreshRedisKey, true, 'EX', 10);
+            needsRefresh = true;
           }
           if (!token || needsRefresh) {
             const response = await request({
@@ -78,18 +84,19 @@ module.exports = {
               defaultClient.del(refreshRedisKey);
             } 
           }
-					req.headers = {
-						...req.headers,
-						authorization: `Bearer ${token}`,
-					}
-				}
+          req.headers = {
+            ...req.headers,
+            authorization: `Bearer ${token}`,
+          }
+          return next();
+        } 
       } catch (e) {
-        if (refreshRedisKey) {
-          defaultClient.del(refreshRedisKey);
-        }
-        console.error('Error in basic-to-jwt policy:', e)
-        res.sendStatus(e.statusCode)
-        return;
+      if (refreshRedisKey) {
+        defaultClient.del(refreshRedisKey);
+      }
+      console.error('Error in basic-to-jwt policy:', e)
+      res.sendStatus(e.statusCode)
+      return;
       }
       next();
     };
