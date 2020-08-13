@@ -1,5 +1,5 @@
 module.exports = {
-  version: '1.3.0',
+  version: '1.3.2',
   init: (pluginContext) => {
      pluginContext.registerPolicy(require('./policies/basic-to-jwt.policy'))
   },

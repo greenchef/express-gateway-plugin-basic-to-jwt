@@ -17,12 +17,13 @@ module.exports = {
   },
   policy: ({ authUrl, nameProperty, passProperty, tokenProperty, cacheSeconds = 0 }) => {
     return async (req, res, next) => {
+      const authHeader = (req.headers || {}).authorization;
       if (authHeader && authHeader.startsWith('Basic ')) {
         const credentials = auth(req);
         const redisKey = `${credentials.name}~?~${credentials.pass}`;
         const refreshRedisKey = `${credentials.name}~?~${credentials.pass}~?~refreshInProgress`;
   
-        const wait = () => {
+        const waitForNewToken = () => {
           return new Promise((res) => {
             let pollingCount = 0;
             setInterval(async () => {
@@ -32,7 +33,7 @@ module.exports = {
                 res();
               } else {
                 pollingCount += 1;
-                if (pollingCount >= 10) {
+                if (pollingCount >= 20) {
                   clearInterval();
                   res()
                 }
@@ -41,7 +42,7 @@ module.exports = {
           });    
         }
     
-        const getAndCheckTokenExpiration = async (tokenKey, timeToCheck = 30) => {
+        const getAndCheckTokenExpiration = async (tokenKey, timeToCheck = 2) => {
           const tokenInCache = await defaultClient.get(tokenKey);
           if (!tokenInCache) return null;
           const decodedToken = jwt.decode(tokenInCache);
@@ -65,7 +66,7 @@ module.exports = {
           } else {
             defaultClient.set(redisKey, token);
           }
-          if (needsRefresh && refreshRedisKey) {
+          if (refreshRedisKey) {
             defaultClient.del(refreshRedisKey);
           }
           return token;
@@ -86,7 +87,7 @@ module.exports = {
           } else {
             const refreshInProgress = await defaultClient.get(refreshRedisKey);
             if (refreshInProgress) {
-              await wait();
+              await waitForNewToken();
               const newToken = await getAndCheckTokenExpiration(redisKey);
               updateHeadersAndNext(newToken);
               return;
@@ -100,8 +101,8 @@ module.exports = {
           if (refreshRedisKey) {
             defaultClient.del(refreshRedisKey);
           }
-          console.error('Error in basic-to-jwt policy:', e)
-          res.sendStatus(e.statusCode)
+          console.error('Error in basic-to-jwt policy:', e);
+          res.sendStatus(e.statusCode);
           return;
         }
       }
