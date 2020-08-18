@@ -22,34 +22,38 @@ module.exports = {
         const credentials = auth(req);
         const redisKey = `${credentials.name}~?~${credentials.pass}`;
         const refreshRedisKey = `${credentials.name}~?~${credentials.pass}~?~refreshInProgress`;
-  
+
         const waitForNewToken = () => {
           return new Promise((res) => {
-            let pollingCount = 0;
-            setInterval(async () => {
+						let pollingCount = 0;
+						let intervalFunc = null;
+            intervalFunc = setInterval(async () => {
               const refreshKeyExists = await defaultClient.get(refreshRedisKey)
               if (!refreshKeyExists) {
-                clearInterval();
-                res();
+								clearInterval(intervalFunc);
+								res();
+								return;
               } else {
                 pollingCount += 1;
                 if (pollingCount >= 20) {
-                  clearInterval();
-                  res()
+									clearInterval(intervalFunc);
+									res()
+									return;
                 }
               }
             }, 200)
-          });    
+          });
         }
-    
+
         const getAndCheckTokenExpiration = async (tokenKey, timeToCheck = 2) => {
           const tokenInCache = await defaultClient.get(tokenKey);
           if (!tokenInCache) return null;
           const decodedToken = jwt.decode(tokenInCache);
           return (decodedToken.exp - (Date.now() / 1000)) > timeToCheck ? tokenInCache : null;
         }
-    
+
         const getNewTokenAndSetInCache = async (creds) => {
+					await defaultClient.set(refreshRedisKey, true)
           const response = await request({
             method: 'POST',
             uri: authUrl,
@@ -59,7 +63,7 @@ module.exports = {
             },
             json: true
           });
-    
+
           const token = tokenProperty ? response[tokenProperty] : response;
           if (cacheSeconds) {
             defaultClient.set(redisKey, token, 'EX', cacheSeconds);
@@ -71,30 +75,26 @@ module.exports = {
           }
           return token;
         }
-  
+
         const updateHeadersAndNext = (token) => {
           req.headers = {
             ...req.headers,
             authorization: `Bearer ${token}`,
           }
-          next();
         }
         try {
           const token = await getAndCheckTokenExpiration(redisKey);
           if (token) {
             updateHeadersAndNext(token);
-            return;
           } else {
             const refreshInProgress = await defaultClient.get(refreshRedisKey);
             if (refreshInProgress) {
               await waitForNewToken();
-              const newToken = await getAndCheckTokenExpiration(redisKey);
+							const newToken = await getAndCheckTokenExpiration(redisKey);
               updateHeadersAndNext(newToken);
-              return;
             } else {
               const newToken = await getNewTokenAndSetInCache(credentials);
               updateHeadersAndNext(newToken);
-              return;
             }
           }
         } catch (e) {
@@ -102,10 +102,10 @@ module.exports = {
             defaultClient.del(refreshRedisKey);
           }
           console.error('Error in basic-to-jwt policy:', e);
-          res.sendStatus(e.statusCode);
-          return;
+					res.sendStatus(e.statusCode);
+					return;
         }
-      }
+			}
       next();
     }
   }
